@@ -35,80 +35,154 @@ STEP-5: Display the obtained cipher text.
 
 
 Program:
+```c
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+#define SIZE 5
+
+void generateKeyMatrix(char key[], char matrix[SIZE][SIZE]) {
+    int alpha[26] = {0};
+    int i, j, k = 0;
+    char current;
+
+    // Remove duplicates and replace 'J' with 'I'
+    for (i = 0; key[i] != '\0'; i++) {
+        current = toupper(key[i]);
+        if (current == 'J') current = 'I';
+        if (current < 'A' || current > 'Z' || alpha[current - 'A'])
+            continue;
+        alpha[current - 'A'] = 1;
+        key[k++] = current;
+    }
+    key[k] = '\0';
+
+    // Fill matrix with key characters and remaining alphabet
+    i = 0; k = 0;
+    for (int row = 0; row < SIZE; row++) {
+        for (int col = 0; col < SIZE; col++) {
+            if (i < strlen(key)) {
+                matrix[row][col] = key[i++];
+            } else {
+                for (char ch = 'A'; ch <= 'Z'; ch++) {
+                    if (ch == 'J' || alpha[ch - 'A'])
+                        continue;
+                    matrix[row][col] = ch;
+                    alpha[ch - 'A'] = 1;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void findPosition(char matrix[SIZE][SIZE], char ch, int *row, int *col) {
+    if (ch == 'J') ch = 'I';  // Treat 'J' as 'I'
+    for (int i = 0; i < SIZE; i++) {
+        for (int j = 0; j < SIZE; j++) {
+            if (matrix[i][j] == ch) {
+                *row = i;
+                *col = j;
+                return;
+            }
+        }
+    }
+}
+
+void processDigraph(char a, char b, char matrix[SIZE][SIZE], char *resA, char *resB, int encrypt) {
+    int row1, col1, row2, col2;
+    findPosition(matrix, a, &row1, &col1);
+    findPosition(matrix, b, &row2, &col2);
+
+    if (row1 == row2) {  // Same row
+        *resA = matrix[row1][(col1 + (encrypt ? 1 : SIZE - 1)) % SIZE];
+        *resB = matrix[row2][(col2 + (encrypt ? 1 : SIZE - 1)) % SIZE];
+    } else if (col1 == col2) {  // Same column
+        *resA = matrix[(row1 + (encrypt ? 1 : SIZE - 1)) % SIZE][col1];
+        *resB = matrix[(row2 + (encrypt ? 1 : SIZE - 1)) % SIZE][col2];
+    } else {  // Rectangle swap
+        *resA = matrix[row1][col2];
+        *resB = matrix[row2][col1];
+    }
+}
+
+void preprocessText(char *text) {
+    char temp[100] = {0};
+    int k = 0;
+
+    for (int i = 0; text[i]; i++) {
+        if (isalpha(text[i])) {
+            temp[k++] = toupper(text[i] == 'J' ? 'I' : text[i]);
+        }
+    }
+    temp[k] = '\0';
+    strcpy(text, temp);
+}
+
+void encryptDecryptText(char *text, char matrix[SIZE][SIZE], int encrypt) {
+    preprocessText(text);
+    char result[100] = {0};
+    int len = strlen(text), k = 0;
+
+    for (int i = 0; i < len; i += 2) {
+        char a = text[i];
+        char b = (i + 1 < len) ? text[i + 1] : 'X';
+
+        if (a == b) {
+            b = 'X';  // Insert 'X' between identical letters
+            i--;      // Re-evaluate second character
+        }
+
+        char resA, resB;
+        processDigraph(a, b, matrix, &resA, &resB, encrypt);
+        result[k++] = resA;
+        result[k++] = resB;
+    }
+    result[k] = '\0';
+    strcpy(text, result);
+}
+
+void printMatrix(char matrix[SIZE][SIZE]) {
+    printf("Key Matrix:\n");
+    for (int i = 0; i < SIZE; i++) {
+        for (int j = 0; j < SIZE; j++) {
+            printf("%c ", matrix[i][j]);
+        }
+        printf("\n");
+    }
+}
+
+int main() {
+    char key[100], text[100], matrix[SIZE][SIZE];
+    
+    printf("Enter the key: ");
+    fgets(key, sizeof(key), stdin);
+    key[strcspn(key, "\n")] = '\0';
+
+    printf("Enter text to encrypt: ");
+    fgets(text, sizeof(text), stdin);
+    text[strcspn(text, "\n")] = '\0';
+
+    generateKeyMatrix(key, matrix);
+    printMatrix(matrix);
+
+    encryptDecryptText(text, matrix, 1);  // Encrypt
+    printf("Encrypted Text: %s\n", text);
+
+    encryptDecryptText(text, matrix, 0);  // Decrypt
+    printf("Decrypted Text: %s\n", text);
+
+    return 0;
+}
+
 ```
-import string
-def create_playfair_table(keyword):
-    keyword = keyword.upper().replace('J', 'I')
-    seen = set()
-    table = []
-    for ch in keyword + string.ascii_uppercase:
-        if ch in seen or ch == 'J':
-            continue
-        seen.add(ch)
-        table.append(ch)
-    return [table[i*5:(i+1)*5] for i in range(5)]
-def positions(table):
-    pos = {}
-    for r, row in enumerate(table):
-        for c, ch in enumerate(row):
-            pos[ch] = (r, c)
-    return pos
-def prepare_text(text):
-    text = text.upper().replace('J','I')
-    text = ''.join([c for c in text if c in string.ascii_uppercase])
-    res, i = [], 0
-    while i < len(text):
-        a = text[i]
-        b = text[i+1] if i+1 < len(text) else 'X'
-        if a == b:
-            res.append(a+'X')
-            i += 1
-        else:
-            res.append(a+b)
-            i += 2
-    return res
-def encrypt_pair(pair, table, pos):
-    a, b = pair
-    ra, ca = pos[a]
-    rb, cb = pos[b]
-    if ra == rb:
-        return table[ra][(ca+1)%5] + table[rb][(cb+1)%5]
-    elif ca == cb:
-        return table[(ra+1)%5][ca] + table[(rb+1)%5][cb]
-    else:
-        return table[ra][cb] + table[rb][ca]
-def decrypt_pair(pair, table, pos):
-    a, b = pair
-    ra, ca = pos[a]
-    rb, cb = pos[b]
-    if ra == rb:
-        return table[ra][(ca-1)%5] + table[rb][(cb-1)%5]
-    elif ca == cb:
-        return table[(ra-1)%5][ca] + table[(rb-1)%5][cb]
-    else:
-        return table[ra][cb] + table[rb][ca]
-def playfair_encrypt(text, keyword):
-    table = create_playfair_table(keyword)
-    pos = positions(table)
-    return ''.join([encrypt_pair(pair, table, pos) for pair in prepare_text(text)])
-def playfair_decrypt(cipher, keyword):
-    table = create_playfair_table(keyword)
-    pos = positions(table)
-    pairs = [cipher[i:i+2] for i in range(0, len(cipher), 2)]
-    return ''.join([decrypt_pair(pair, table, pos) for pair in pairs])
-key_value = "HELLOWORLD" 
-plain_text = "SANTHOSH"
-cipher_text = playfair_encrypt(plain_text, key_value)
-decrypted_text = playfair_decrypt(cipher_text, key_value)
-print("Plain Text:", plain_text)
-print("Key Value:", key_value)
-print("Encrypted Cipher Text:", cipher_text)
-print("Decrypted Cipher Text:", decrypted_text)
-```
+
+Output:
 
 
-# Output:
-<img width="1026" height="105" alt="image" src="https://github.com/user-attachments/assets/7a3dd97d-315a-4da8-a43b-bb84567bdcc0" />
+<img width="532" height="589" alt="image" src="https://github.com/user-attachments/assets/3ab571b4-edf2-44ec-a038-aed4278b0f21" />
 
-# RESULT:
-   The Playfair Cipher program was successfully implemented in Python.
+
+Result: Thus the implementation of Playfair cipher had been executed successfully.
+
